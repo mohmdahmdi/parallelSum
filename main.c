@@ -5,41 +5,44 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
+void calc(int start, int end, int* result) {
+    int sum = 0;
+    for (int i = start; i <= end; i++) {
+        sum += i;
+    }
+    *result = sum;
+}
+
 int main() {
     int n, m;
     scanf("%d", &n);
     scanf("%d", &m);
 
-    int range = n / m;
+    int segment = n / m;
     int remainder = n % m;
 
-    int shmid = shmget(IPC_PRIVATE, m * sizeof(int), 0666 | IPC_CREAT);
-    if (shmid == -1) {
+    int shm_id = shmget(IPC_PRIVATE, m * sizeof(int), 0666 | IPC_CREAT);
+    if (shm_id == -1) {
         perror("shmget");
-        exit();
+        exit(EXIT_FAILURE);
     }
 
-    int* results = (int*) shmat(shmid, NULL, 0);
+    int* results = (int*) shmat(shm_id, NULL, 0);
     if (results == (int*) -1) {
         perror("shmat");
-        exit();
+        exit(EXIT_FAILURE);
     }
 
     for (int i = 0; i < m; i++) {
+        int start = i * segment + 1;
+        int end = (i + 1) * segment;
+        if (i == m - 1) {
+            end += remainder;
+        }
+
         pid_t pid = fork();
         if (pid == 0) {
-            int start = i * range + 1;
-            int end = (i + 1) * range;
-            if (i == m - 1) {
-                end += remainder;
-            }
-
-            int sum = 0;
-            for (int j = start; j <= end; j++) {
-                sum += j;
-            }
-
-            results[i] = sum;
+            calc(start, end, &results[i]);
             shmdt(results);
             exit(EXIT_SUCCESS);
         } else if (pid < 0) {
@@ -52,15 +55,13 @@ int main() {
         wait(NULL);
     }
 
-    int totalSum = 0;
+    int total = 0;
     for (int i = 0; i < m; i++) {
-        totalSum += results[i];
+        total += results[i];
     }
 
-    printf("%d\n", totalSum);
+    printf("%d\n", total);
 
-    shmdt(results);
-    shmctl(shmid, IPC_RMID, NULL);
 
     return 0;
 }
